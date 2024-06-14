@@ -10,6 +10,7 @@ import os
 
 from urllib.parse import urlparse
 from urllib.parse import parse_qs
+from urllib.parse import quote
 
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
@@ -27,9 +28,6 @@ driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install())
 
 client = pymongo.MongoClient(os.environ.get('MONGODB_CONN'), tlsCAFile=ca)
 db = client['indem']
-jobs_linkedin = db['jobs_linkedin']
-skills_linkedin = db['skills_linkedin']
-crawler_log = db['crawler_log']
 
 
 def log_error(err_str):
@@ -55,15 +53,22 @@ def parse_skills(skills_str, job_title):
     else: # 2 or less skills
         return skills_str.split(' and ')
 
-def crawler():
+def crawler(title):
     job_start_time = datetime.now().strftime("%Y%m%d %H:%M:%S")
     counter = 0
     jobs_inserted = 0
+    jobs_not_inserted = 0
     skills_crawled = 0
+    log_error('new error log for title ' + title + ' start time: ' + job_start_time)
+    
+    db_suffix = title.replace(' ', '_')
+    jobs_linkedin = db['jobs_li_' + db_suffix]
+    skills_linkedin = db['skills_li_' + db_suffix]
+    crawler_log = db['crawler_log']
 
     # LI stops loading jobs after 1000
     while counter < 1000:
-        driver.get('https://www.linkedin.com/jobs/search/?keywords=software%20engineer' + '&start=' + str(counter))
+        driver.get('https://www.linkedin.com/jobs/search/?keywords=' + quote(title) + '&start=' + str(counter))
         time.sleep(5 + random.random() * 3)
         soup = BeautifulSoup(driver.page_source, 'html.parser')
 
@@ -135,31 +140,33 @@ def crawler():
                         job['salary_max'] = salary_max
 
                     jobs_linkedin.insert_one(job)
-
                     jobs_inserted += 1
+
+                    # update count for each skill found in this job description
+                    for s in final_skills:
+                        skills_crawled += 1
+
+                        skill_db = skills_linkedin.find_one({'skill': s})
+                        if skill_db is None:
+                            skills_linkedin.insert_one({
+                                'skill': s,
+                                'count': 1,
+                                'last_updated': job_start_time
+                            })
+                        else:
+                            skills_linkedin.update_one(
+                                {'skill': s },
+                                { '$set': {
+                                    'count': skill_db['count'] + 1,
+                                    'last_updated': job_start_time
+                            }})
                 else:
                     log_error('job ' + job_id + ' already exists')
 
-                # update count for each skill found in this job description
-                for s in final_skills:
-                    skills_crawled += 1
-
-                    skill_db = skills_linkedin.find_one({'skill': s})
-                    if skill_db is None:
-                        skills_linkedin.insert_one({
-                            'skill': s,
-                            'count': 1,
-                            'last_updated': job_start_time
-                        })
-                    else:
-                        skills_linkedin.update_one(
-                            {'skill': s },
-                            { '$set': {
-                                'count': skill_db['count'] + 1,
-                                'last_updated': job_start_time
-                            }})
+                
             except Exception as e:
                 log_error('could not parse job ' + job_id + '. e: ' + str(e))
+                jobs_not_inserted += 1
             
             counter += 1
         
@@ -168,11 +175,19 @@ def crawler():
         'job_start_time': job_start_time,
         'job_end_time': datetime.now().strftime("%Y%m%d %H:%M:%S"),
         'jobs_inserted': jobs_inserted,
+        'jobs_not_inserted': jobs_not_inserted,
         'skills_crawled': skills_crawled,
+        'title': title
     })
+    
+    print('jobs inserted: ' + str(jobs_inserted) + ', skills crawled: ' + str(skills_crawled) + ', jobs not inserted: ' + str(jobs_not_inserted))
 
     driver.close()
 
 
 print('Starting the crawler...')
-crawler()
+time.sleep(20)
+
+titles = ['frontend engineer', 'backend engineer', 'full stack engineer', 'machine learning engineer']
+for title in titles:
+    crawler(title)
