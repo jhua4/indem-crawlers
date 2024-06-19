@@ -180,8 +180,6 @@ def crawler(title):
     
     print('jobs inserted: ' + str(jobs_inserted) + ', skills crawled: ' + str(skills_crawled) + ', jobs not inserted: ' + str(jobs_not_inserted))
 
-    
-
 
 print('Starting the crawler...')
 time.sleep(25) # Time to login
