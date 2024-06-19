@@ -1,5 +1,4 @@
-# This file crawls job postings on LinkedIn for the query 'software engineer'
-# and stores the salary and skills required for each job.
+# This file crawls job postings on LinkedIn and stores the salary and skills required.
 
 from bs4 import BeautifulSoup
 import time 
@@ -23,7 +22,6 @@ ca = certifi.where()
 
 chrome_options = Options()
 chrome_options.add_argument('—-ignore-certificate-errors')
-chrome_options.add_argument('--user-data-dir=C:/Users/jhua8/AppData/Local/Google/Chrome/User Data') # Get logged in data
 driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=chrome_options)
 
 client = pymongo.MongoClient(os.environ.get('MONGODB_CONN'), tlsCAFile=ca)
@@ -182,12 +180,14 @@ def crawler(title):
     
     print('jobs inserted: ' + str(jobs_inserted) + ', skills crawled: ' + str(skills_crawled) + ', jobs not inserted: ' + str(jobs_not_inserted))
 
-    driver.close()
+    
 
 
 print('Starting the crawler...')
-time.sleep(20)
+time.sleep(25) # Time to login
 
-titles = ['frontend engineer', 'backend engineer', 'full stack engineer', 'machine learning engineer']
+titles = ['backend engineer', 'full stack engineer', 'machine learning engineer']
 for title in titles:
     crawler(title)
+
+driver.close()
