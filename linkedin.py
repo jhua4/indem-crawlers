@@ -149,15 +149,20 @@ def crawler(title):
                             skills_linkedin.insert_one({
                                 'skill': s,
                                 'count': 1,
-                                'last_updated': job_start_time
+                                'last_updated': job_start_time,
+                                'has_salary_data': salary_min != -1 and salary_max != -1
                             })
                         else:
+                            set_query = {
+                                'count': skill_db['count'] + 1,
+                                'last_updated': job_start_time
+                            }
+                            if salary_min != -1 and salary_max != -1:
+                                set_query['has_salary_data'] = True
+                            
                             skills_linkedin.update_one(
                                 {'skill': s },
-                                { '$set': {
-                                    'count': skill_db['count'] + 1,
-                                    'last_updated': job_start_time
-                            }})
+                                { '$set': set_query})
                 else:
                     log_error('job ' + job_id + ' already exists')
 
